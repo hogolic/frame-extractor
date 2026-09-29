@@ -1,0 +1,17 @@
+# 仓库内统一用 LF，避免 Windows 开发者提交 CRLF 造成整文件 diff
+* text=auto eol=lf
+
+# 二进制文件不做行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.zip binary
+
+# 明确指定语言，GitHub 语法高亮更准
+*.html linguist-language=HTML

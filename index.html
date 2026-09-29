@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frame Extractor · 视频帧提取器</title>
+<meta name="description" content="一键提取视频首帧、尾帧、指定帧。纯浏览器本地处理，不上传、不注册、无水印、无限次。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎞️</text></svg>">
+<style>
+  :root {
+    --bg: #0e1015;
+    --panel: #151820;
+    --panel-2: #12151c;
+    --line: #242833;
+    --line-2: #2c3340;
+    --text: #e8eaed;
+    --text-2: #8b93a1;
+    --text-3: #5f6877;
+    --accent: #3d6dff;
+    --accent-hover: #2f5ae0;
+    --green: #4ade80;
+    --red: #ff8080;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 20px 64px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  header { margin-bottom: 26px; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: .2px; }
+  h1 span { color: var(--text-3); font-weight: 400; font-size: 15px; margin-left: 8px; }
+  .sub { font-size: 13px; color: var(--text-2); margin-top: 6px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .badge {
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: #17202e; color: #7fb0ff; border: 1px solid #22334d;
+  }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 22px;
+  }
+  .card + .card { margin-top: 18px; }
+  .card h2 {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 6px;
+    background: #1d2740; color: #7fb0ff; font-size: 11.5px; font-weight: 600;
+  }
+  .card h2 .hint { font-size: 12px; color: var(--text-3); font-weight: 400; margin-left: auto; }
+
+  #drop {
+    border: 1.5px dashed var(--line-2); border-radius: 14px;
+    padding: 46px 20px; text-align: center; cursor: pointer;
+    transition: .18s; background: var(--panel-2);
+  }
+  #drop:hover, #drop.over { border-color: var(--accent); background: #141a26; }
+  #drop .big { font-size: 15px; font-weight: 500; }
+  #drop .small { font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
+
+  .hidden { display: none !important; }
+
+  video {
+    width: 100%; border-radius: 10px; background: #000;
+    max-height: 380px; display: block;
+  }
+  .meta {
+    display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px;
+    font-size: 12.5px; color: var(--text-2);
+  }
+  .meta b { color: #cfd6e2; font-weight: 500; }
+
+  /* 时间轴 */
+  .timeline { margin-top: 16px; }
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 6px; border-radius: 3px;
+    background: #232a37; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid #0e1015;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 15px; height: 15px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid #0e1015;
+  }
+  .tl-labels {
+    display: flex; justify-content: space-between;
+    font-size: 11.5px; color: var(--text-3); margin-top: 6px;
+  }
+
+  /* 控制行 */
+  .controls {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end;
+    margin-top: 18px;
+  }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11.5px; color: var(--text-2); }
+  input[type=number], input[type=text] {
+    font-family: inherit; font-size: 13px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 8px 11px; outline: none; transition: .15s;
+  }
+  input[type=number]:focus, input[type=text]:focus { border-color: var(--accent); }
+  input[type=number] { width: 96px; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+
+  button {
+    font-family: inherit; font-size: 13.5px; font-weight: 500;
+    padding: 9px 16px; border-radius: 9px; border: 1px solid transparent;
+    cursor: pointer; transition: .15s; white-space: nowrap;
+  }
+  .primary { background: var(--accent); color: #fff; }
+  .primary:hover { background: var(--accent-hover); }
+  .ghost { background: #1b2029; color: #cfd6e2; border-color: var(--line-2); }
+  .ghost:hover { background: #222836; }
+  .danger { background: #2a1618; color: #ff9a9a; border-color: #4a2226; }
+  .danger:hover { background: #351b1e; }
+  button:disabled { background: #232a37; color: #5c6472; cursor: not-allowed; border-color: transparent; }
+
+  .step-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .step-row button { flex: 1; min-width: 96px; justify-content: center; }
+
+  .row-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+  /* 批量 */
+  .batch-input { width: 100%; }
+  .syntax {
+    font-size: 12px; color: var(--text-3); margin-top: 9px; line-height: 1.9;
+  }
+  .syntax code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--panel-2); border: 1px solid var(--line);
+    padding: 1.5px 6px; border-radius: 5px; color: #9fb4d6; font-size: 11.5px;
+  }
+
+  /* 列表 */
+  .list-head {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .list-head h2 { margin-bottom: 0; }
+  .list-head .spacer { flex: 1; }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .item {
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; overflow: hidden; position: relative;
+  }
+  .item img {
+    width: 100%; display: block; aspect-ratio: 16/9;
+    object-fit: cover; background: #0a0c10;
+  }
+  .item .bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 9px; font-size: 11.5px; color: var(--text-2);
+  }
+  .item .t { flex: 1; font-variant-numeric: tabular-nums; }
+  .item .mini {
+    background: none; border: none; color: #7fb0ff;
+    font-size: 11.5px; padding: 2px 5px; cursor: pointer; border-radius: 5px;
+  }
+  .item .mini:hover { background: #1d2740; }
+  .item .mini.del { color: #ff9a9a; }
+  .item .mini.del:hover { background: #2a1618; }
+  .item .tag-pos {
+    position: absolute; top: 7px; left: 7px;
+    background: #000000bb; color: #fff; font-size: 11px;
+    padding: 2px 7px; border-radius: 5px; backdrop-filter: blur(4px);
+  }
+
+  .empty {
+    text-align: center; padding: 30px 10px; color: var(--text-3); font-size: 13px;
+  }
+
+  .err {
+    margin-top: 16px; padding: 12px 14px; border-radius: 9px;
+    background: #2a1618; border: 1px solid #4a2226; color: var(--red); font-size: 13px;
+  }
+  .ok {
+    margin-top: 16px; padding: 12px 14px; border-radius: 9px;
+    background: #12241a; border: 1px solid #1f4630; color: var(--green); font-size: 13px;
+  }
+
+  .prog {
+    margin-top: 14px; height: 4px; border-radius: 2px;
+    background: #232a37; overflow: hidden;
+  }
+  .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+
+  footer {
+    margin-top: 28px; font-size: 12px; color: var(--text-3);
+    text-align: center; line-height: 1.9;
+  }
+  footer a { color: #7fb0ff; text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  .spin {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid #ffffff44; border-top-color: #fff;
+    border-radius: 50%; animation: sp .7s linear infinite;
+    vertical-align: -2px; margin-right: 7px;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  @media (max-width: 680px) {
+    body { padding: 24px 14px 44px; }
+    .card { padding: 17px; }
+    #grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .step-row button { min-width: 0; font-size: 12.5px; padding: 9px 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Frame Extractor<span>视频帧提取器</span></h1>
+    <div class="sub">提取视频的首帧、尾帧，或任意指定帧。全部在你的浏览器里完成，视频不会离开这台设备。</div>
+    <div class="badges">
+      <span class="badge">不上传</span>
+      <span class="badge">免注册</span>
+      <span class="badge">无水印</span>
+      <span class="badge">无限次</span>
+      <span class="badge">可离线</span>
+      <span class="badge">单文件</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <div id="drop">
+      <div class="big">拖视频到这里，或点击选择文件</div>
+      <div class="small">支持浏览器可解码的格式：MP4 (H.264) / WebM / MOV / MKV 等</div>
+      <input type="file" id="file" accept="video/*" class="hidden">
+    </div>
+
+    <div id="stage" class="hidden">
+      <video id="video" playsinline preload="auto"></video>
+      <div class="meta">
+        <span>时长 <b id="mDur">—</b></span>
+        <span>分辨率 <b id="mRes">—</b></span>
+        <span>大小 <b id="mSize">—</b></span>
+        <span>文件名 <b id="mName">—</b></span>
+      </div>
+
+      <div class="timeline">
+        <input type="range" id="slider" min="0" max="1000" value="0" step="1">
+        <div class="tl-labels">
+          <span id="tlNow">0.00s</span>
+          <span id="tlEnd">0.00s</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="field">
+          <label>时间（秒）</label>
+          <input type="number" id="inTime" step="0.01" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>帧号</label>
+          <input type="number" id="inFrame" step="1" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>帧率 fps</label>
+          <input type="number" id="inFps" step="1" min="1" max="240" value="30">
+        </div>
+        <button class="ghost" id="btnPlay">播放</button>
+      </div>
+
+      <div class="step-row">
+        <button class="ghost" id="btnFirst">⏮ 首帧</button>
+        <button class="ghost" id="btnPrev">◀ 上一帧</button>
+        <button class="ghost" id="btnNext">下一帧 ▶</button>
+        <button class="ghost" id="btnLast">尾帧 ⏭</button>
+      </div>
+
+      <div class="row-actions">
+        <button class="primary" id="btnGrab">提取此帧</button>
+        <button class="ghost" id="btnBoth">提取首帧 + 尾帧</button>
+        <button class="ghost" id="btnReset">换视频</button>
+      </div>
+
+      <div id="msg"></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="batchCard">
+    <h2><span class="n">2</span>批量提取<span class="hint">一次拿一大批</span></h2>
+    <input type="text" class="batch-input" id="inBatch" placeholder="例如：0, 1.5, 3, 5.2, end">
+    <div class="syntax">
+      <code>0, 1.5, 3, end</code> 按时间点（秒）提取，<code>end</code> 表示最后一帧<br>
+      <code>every:1</code> 全片每隔 1 秒抽一帧（<code>every:0.5</code> 即每半秒）
+    </div>
+    <div class="row-actions">
+      <button class="primary" id="btnBatch">开始批量提取</button>
+    </div>
+    <div class="prog hidden" id="progWrap"><i id="progBar"></i></div>
+  </div>
+
+  <div class="card hidden" id="listCard">
+    <div class="list-head">
+      <h2><span class="n">3</span>已提取 <span id="count">0</span> 帧</h2>
+      <div class="spacer"></div>
+      <button class="ghost" id="btnZip">打包下载</button>
+      <button class="danger" id="btnClear">清空</button>
+    </div>
+    <div id="grid"></div>
+    <div class="empty hidden" id="empty">还没有提取任何帧</div>
+  </div>
+
+  <footer>
+    视频文件不会离开你的电脑，所有解码与截图都在浏览器内存中完成。<br>
+    提示：H.265 / HEVC 编码的视频在多数浏览器里无法解码，请先转成 H.264。<br>
+    <span id="verLine">Frame Extractor</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------------- 元素引用 ---------------- */
+  const $ = function (id) { return document.getElementById(id); };
+  const drop = $('drop'), fileInput = $('file'), stage = $('stage'), video = $('video');
+  const slider = $('slider'), tlNow = $('tlNow'), tlEnd = $('tlEnd');
+  const inTime = $('inTime'), inFrame = $('inFrame'), inFps = $('inFps');
+  const btnPlay = $('btnPlay'), btnGrab = $('btnGrab'), btnBoth = $('btnBoth'), btnReset = $('btnReset');
+  const btnFirst = $('btnFirst'), btnPrev = $('btnPrev'), btnNext = $('btnNext'), btnLast = $('btnLast');
+  const msg = $('msg');
+  const batchCard = $('batchCard'), inBatch = $('inBatch'), btnBatch = $('btnBatch');
+  const progWrap = $('progWrap'), progBar = $('progBar');
+  const listCard = $('listCard'), grid = $('grid'), countEl = $('count'), emptyEl = $('empty');
+  const btnZip = $('btnZip'), btnClear = $('btnClear');
+
+  /* ---------------- 状态 ---------------- */
+  let objectUrl = null;
+  let duration = 0;
+  let baseName = 'video';
+  let frames = [];        // { full, thumb, t, w, h }
+  let frameSeq = 0;       // 帧序号（追加用）
+  let busy = false;
+  let wasPlaying = false;
+  const MAX_FRAMES = 400;
+
+  /* ---------------- 工具函数 ---------------- */
+  function showMsg(text, kind) {
+    msg.innerHTML = '';
+    if (!text) return;
+    const d = document.createElement('div');
+    d.className = kind === 'ok' ? 'ok' : 'err';
+    d.textContent = text;
+    msg.appendChild(d);
+  }
+  function fmtTime(s) {
+    if (!isFinite(s)) return '—';
+    const m = Math.floor(s / 60);
+    const sec = s - m * 60;
+    return m > 0 ? m + '分' + sec.toFixed(2) + '秒' : sec.toFixed(2) + '秒';
+  }
+  function fmtSize(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(0) + ' KB';
+    return (b / 1048576).toFixed(1) + ' MB';
+  }
+  function clampTime(t) {
+    const max = Math.max(0, duration - 0.04);
+    return Math.min(Math.max(0, t), max);
+  }
+  function getFps() {
+    const v = parseFloat(inFps.value);
+    return (isFinite(v) && v > 0) ? v : 30;
+  }
+
+  /* ---------------- 加载视频 ---------------- */
+  function loadFile(file) {
+    if (!file) return;
+    showMsg('');
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    baseName = (file.name || 'video').replace(/\.[^.]+$/, '') || 'video';
+
+    $('mName').textContent = file.name || '—';
+    $('mSize').textContent = fmtSize(file.size);
+    $('mDur').textContent = '读取中…';
+    $('mRes').textContent = '—';
+
+    stage.classList.remove('hidden');
+    batchCard.classList.remove('hidden');
+    listCard.classList.remove('hidden');
+    video.src = objectUrl;
+    video.load();
+  }
+
+  video.addEventListener('loadedmetadata', function () {
+    duration = video.duration;
+    $('mDur').textContent = fmtTime(duration);
+    $('mRes').textContent = video.videoWidth + ' × ' + video.videoHeight;
+    tlEnd.textContent = duration.toFixed(2) + 's';
+    slider.max = Math.max(1, Math.round(duration * 1000));
+    slider.value = 0;
+
+    if (!video.videoWidth) {
+      showMsg('这个视频浏览器解不开（很可能是 H.265 / HEVC 编码）。先转成 H.264 的 MP4 再试。');
+      return;
+    }
+    syncFromVideo(0);
+    btnGrab.disabled = false;
+  });
+
+  video.addEventListener('error', function () {
+    showMsg('视频加载失败：浏览器不支持这个格式或编码。建议转成 H.264 编码的 MP4。');
+  });
+
+  /* ---------------- seek 控制（合并高频请求） ---------------- */
+  let pendingSeek = null;
+  let seeking = false;
+
+  function seekTo(t) {
+    return new Promise(function (resolve, reject) {
+      let done = false;
+      function finish(ok, err) {
+        if (done) return;
+        done = true;
+        video.removeEventListener('seeked', onSeeked);
+        if (ok) requestAnimationFrame(function () { requestAnimationFrame(resolve); });
+        else reject(err);
+      }
+      function onSeeked() { finish(true); }
+      video.addEventListener('seeked', onSeeked);
+      try { video.currentTime = t; } catch (e) { finish(false, e); return; }
+      setTimeout(function () { finish(false, new Error('定位画面超时，视频可能已损坏')); }, 10000);
+    });
+  }
+
+  async function requestSeek(t) {
+    pendingSeek = t;
+    if (seeking) return;
+    seeking = true;
+    try {
+      while (pendingSeek !== null) {
+        const target = pendingSeek;
+        pendingSeek = null;
+        await seekTo(target);
+        syncFromVideo(video.currentTime);
+      }
+    } catch (e) {
+      showMsg(e && e.message ? e.message : '定位失败');
+    } finally {
+      seeking = false;
+    }
+  }
+
+  /* ---------------- 同步 UI ---------------- */
+  function syncFromVideo(t) {
+    if (!isFinite(t)) return;
+    const fps = getFps();
+    slider.value = Math.round(t * 1000);
+    tlNow.textContent = t.toFixed(2) + 's';
+    if (document.activeElement !== inTime) inTime.value = t.toFixed(2);
+    if (document.activeElement !== inFrame) inFrame.value = Math.round(t * fps);
+  }
+
+  function gotoTime(t, fromSlider) {
+    const target = clampTime(t);
+    syncFromVideo(target);
+    if (fromSlider) requestSeek(target);
+    else requestSeek(target);
+  }
+
+  /* ---------------- 各控件事件 ---------------- */
+  slider.addEventListener('input', function () {
+    gotoTime(parseFloat(slider.value) / 1000, true);
+  });
+  inTime.addEventListener('change', function () {
+    const v = parseFloat(inTime.value);
+    if (isFinite(v)) gotoTime(v);
+  });
+  inFrame.addEventListener('change', function () {
+    const v = parseFloat(inFrame.value);
+    if (isFinite(v)) gotoTime(v / getFps());
+  });
+  inFps.addEventListener('change', function () {
+    syncFromVideo(video.currentTime);
+    inFrame.max = Math.ceil(duration * getFps());
+  });
+
+  btnFirst.addEventListener('click', function () { gotoTime(0); });
+  btnLast.addEventListener('click', function () { gotoTime(Math.max(0, duration - 0.04)); });
+  btnPrev.addEventListener('click', function () {
+    const fps = getFps();
+    const cur = Math.round(video.currentTime * fps);
+    gotoTime(Math.max(0, (cur - 1) / fps));
+  });
+  btnNext.addEventListener('click', function () {
+    const fps = getFps();
+    const cur = Math.round(video.currentTime * fps);
+    gotoTime(clampTime((cur + 1) / fps));
+  });
+
+  btnPlay.addEventListener('click', function () {
+    if (video.paused) { video.play(); } else { video.pause(); }
+  });
+  video.addEventListener('play', function () { btnPlay.textContent = '暂停'; });
+  video.addEventListener('pause', function () { btnPlay.textContent = '播放'; });
+  video.addEventListener('timeupdate', function () {
+    if (!video.paused) syncFromVideo(video.currentTime);
+  });
+
+  /* ---------------- 抓帧 ---------------- */
+  function grabAt(srcVideo) {
+    const w = srcVideo.videoWidth, h = srcVideo.videoHeight;
+    if (!w || !h) throw new Error('拿不到画面尺寸，视频可能还没解码完成');
+
+    const full = document.createElement('canvas');
+    full.width = w; full.height = h;
+    full.getContext('2d').drawImage(srcVideo, 0, 0, w, h);
+
+    const thumbW = 320;
+    const thumbH = Math.max(1, Math.round(h * (thumbW / w)));
+    const thumb = document.createElement('canvas');
+    thumb.width = thumbW; thumb.height = thumbH;
+    thumb.getContext('2d').drawImage(full, 0, 0, thumbW, thumbH);
+
+    return {
+      fullUrl: full.toDataURL('image/png'),
+      thumbUrl: thumb.toDataURL('image/jpeg', 0.82),
+      w: w, h: h
+    };
+  }
+
+  function addFrame(shot, t) {
+    if (frames.length >= MAX_FRAMES) throw new Error('一次最多 ' + MAX_FRAMES + ' 帧，请分批处理');
+    const f = { fullUrl: shot.fullUrl, thumbUrl: shot.thumbUrl, t: t, w: shot.w, h: shot.h, id: ++frameSeq };
+    frames.push(f);
+    renderItem(f);
+    updateListUI();
+    return f;
+  }
+
+  function renderItem(f) {
+    const el = document.createElement('div');
+    el.className = 'item';
+    el.dataset.id = f.id;
+
+    const tag = document.createElement('div');
+    tag.className = 'tag-pos';
+    tag.textContent = f.t.toFixed(2) + 's';
+
+    const img = document.createElement('img');
+    img.src = f.thumbUrl;
+    img.alt = '帧 @ ' + f.t.toFixed(2) + 's';
+    img.loading = 'lazy';
+
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+
+    const tSpan = document.createElement('span');
+    tSpan.className = 't';
+    tSpan.textContent = f.w + '×' + f.h;
+
+    const dl = document.createElement('button');
+    dl.className = 'mini';
+    dl.textContent = '下载';
+    dl.addEventListener('click', function () { downloadUrl(f.fullUrl, frameName(f)); });
+
+    const del = document.createElement('button');
+    del.className = 'mini del';
+    del.textContent = '删除';
+    del.addEventListener('click', function () {
+      const i = frames.findIndex(function (x) { return x.id === f.id; });
+      if (i >= 0) frames.splice(i, 1);
+      el.remove();
+      updateListUI();
+    });
+
+    bar.appendChild(tSpan); bar.appendChild(dl); bar.appendChild(del);
+    el.appendChild(tag); el.appendChild(img); el.appendChild(bar);
+    grid.appendChild(el);
+  }
+
+  function frameName(f) {
+    const idx = frames.indexOf(f);
+    const n = (idx >= 0 ? idx + 1 : frames.length + 1);
+    return baseName + '_' + String(n).padStart(3, '0') + '_' + f.t.toFixed(2) + 's.png';
+  }
+
+  function updateListUI() {
+    countEl.textContent = frames.length;
+    emptyEl.classList.toggle('hidden', frames.length > 0);
+    btnZip.disabled = frames.length === 0;
+    btnClear.disabled = frames.length === 0;
+  }
+
+  function downloadUrl(url, name) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  /* ---------------- 提取单帧 / 首尾帧 ---------------- */
+  btnGrab.addEventListener('click', async function () {
+    if (busy) return;
+    busy = true;
+    showMsg('');
+    try {
+      const t = clampTime(video.currentTime);
+      if (Math.abs(video.currentTime - t) > 0.002) await seekTo(t);
+      addFrame(grabAt(video), t);
+      showMsg('已提取 ' + t.toFixed(2) + 's 处的画面', 'ok');
+    } catch (e) {
+      showMsg(e && e.message ? e.message : '提取失败');
+    } finally {
+      busy = false;
+    }
+  });
+
+  btnBoth.addEventListener('click', async function () {
+    if (busy) return;
+    busy = true;
+    btnBoth.disabled = true;
+    btnBoth.innerHTML = '<span class="spin"></span>提取中…';
+    showMsg('');
+    wasPlaying = !video.paused;
+    video.pause();
+    try {
+      await seekTo(0);
+      addFrame(grabAt(video), 0);
+      const tail = clampTime(duration - 0.04);
+      await seekTo(tail);
+      addFrame(grabAt(video), tail);
+      showMsg('首帧与尾帧已提取，可在下方列表里下载', 'ok');
+    } catch (e) {
+      showMsg(e && e.message ? e.message : '提取失败');
+    } finally {
+      busy = false;
+      btnBoth.disabled = false;
+      btnBoth.textContent = '提取首帧 + 尾帧';
+      if (wasPlaying) video.play();
+    }
+  });
+
+  /* ---------------- 批量 ---------------- */
+  function parseBatch(str) {
+    str = String(str || '').trim();
+    if (!str) throw new Error('先填点内容，比如 0, 1.5, 3, end');
+
+    const every = str.match(/^every\s*[:：]?\s*([\d.]+)$/i);
+    if (every) {
+      const step = parseFloat(every[1]);
+      if (!(step > 0)) throw new Error('间隔必须是大于 0 的数字');
+      const out = [];
+      const end = clampTime(duration - 0.04);
+      for (let t = 0; t < end && out.length < MAX_FRAMES; t += step) out.push(t);
+      out.push(end);
+      return out;
+    }
+
+    const parts = str.split(/[,，\s\n]+/).filter(Boolean);
+    if (!parts.length) throw new Error('没解析出任何时间点');
+
+    return parts.map(function (p) {
+      if (/^(end|末尾|末|尾|结尾|最后)$/i.test(p)) return clampTime(duration - 0.04);
+      const v = parseFloat(p);
+      if (!isFinite(v)) throw new Error('看不懂这个值：' + p);
+      if (v < 0) throw new Error('时间不能是负数：' + p);
+      if (v > duration) throw new Error('超出视频长度（' + duration.toFixed(2) + 's）：' + p);
+      return clampTime(v);
+    });
+  }
+
+  btnBatch.addEventListener('click', async function () {
+    if (busy) return;
+    let list;
+    try { list = parseBatch(inBatch.value); }
+    catch (e) { showMsg(e.message); return; }
+
+    if (list.length > MAX_FRAMES) { showMsg('一次最多 ' + MAX_FRAMES + ' 帧'); return; }
+    if (!list.length) { showMsg('没解析出任何时间点'); return; }
+
+    busy = true;
+    showMsg('');
+    btnBatch.disabled = true;
+    btnBatch.innerHTML = '<span class="spin"></span>提取中…';
+    progWrap.classList.remove('hidden');
+    wasPlaying = !video.paused;
+    video.pause();
+
+    let done = 0;
+    try {
+      for (let i = 0; i < list.length; i++) {
+        await seekTo(list[i]);
+        addFrame(grabAt(video), list[i]);
+        done++;
+        progBar.style.width = Math.round((done / list.length) * 100) + '%';
+      }
+      showMsg('批量完成，共提取 ' + done + ' 帧', 'ok');
+    } catch (e) {
+      showMsg('在第 ' + (done + 1) + ' 帧出错：' + (e && e.message ? e.message : '未知错误') + '（已成功 ' + done + ' 帧）');
+    } finally {
+      busy = false;
+      btnBatch.disabled = false;
+      btnBatch.textContent = '开始批量提取';
+      setTimeout(function () { progWrap.classList.add('hidden'); progBar.style.width = '0'; }, 900);
+      if (wasPlaying) video.play();
+    }
+  });
+
+  /* ---------------- 下载全部 ---------------- */
+  btnZip.addEventListener('click', async function () {
+    if (!frames.length) return;
+    btnZip.disabled = true;
+    const original = btnZip.textContent;
+    btnZip.innerHTML = '<span class="spin"></span>打包中…';
+    try {
+      const zip = await buildZip();
+      if (zip) {
+        downloadUrl(zip, baseName + '_frames.zip');
+        showMsg('已打包 ' + frames.length + ' 帧为 ZIP', 'ok');
+      } else {
+        // 降级：逐个下载
+        for (let i = 0; i < frames.length; i++) {
+          await new Promise(function (r) { setTimeout(r, 220); });
+          downloadUrl(frames[i].fullUrl, frameName(frames[i]));
+        }
+        showMsg('已逐个下载 ' + frames.length + ' 帧（浏览器可能提示允许多文件下载）', 'ok');
+      }
+    } catch (e) {
+      showMsg('打包失败：' + (e && e.message ? e.message : '未知错误'));
+    } finally {
+      btnZip.disabled = false;
+      btnZip.textContent = original;
+    }
+  });
+
+  function encodeText(str) {
+    return new TextEncoder().encode(str);
+  }
+
+  /* 手写最小 ZIP（store 模式，不压缩）——零依赖，离线也能打包 */
+  function buildZip() {
+    try {
+      const entries = frames.map(function (f, i) {
+        const b64 = f.fullUrl.split(',')[1];
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let j = 0; j < bin.length; j++) bytes[j] = bin.charCodeAt(j);
+        return { name: frameName(f), data: bytes };
+      });
+
+      const chunks = [];
+      const central = [];
+      let offset = 0;
+
+      function u16(n) { return [n & 255, (n >> 8) & 255]; }
+      function u32(n) { return [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >> 24) & 255]; }
+
+      entries.forEach(function (e) {
+        const nameBytes = encodeText(e.name);
+        const crc = crc32(e.data);
+        const size = e.data.length;
+
+        const local = [].concat(
+          u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(size), u32(size),
+          u16(nameBytes.length), u16(0)
+        );
+        const localBytes = new Uint8Array(local);
+        chunks.push(localBytes, nameBytes, e.data);
+
+        const localLen = localBytes.length + nameBytes.length + size;
+        central.push({ nameBytes: nameBytes, crc: crc, size: size, offset: offset });
+        offset += localLen;
+      });
+
+      const cdChunks = [];
+      let cdSize = 0;
+      central.forEach(function (c) {
+        const head = [].concat(
+          u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(c.crc), u32(c.size), u32(c.size),
+          u16(c.nameBytes.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(c.offset)
+        );
+        const hb = new Uint8Array(head);
+        cdChunks.push(hb, c.nameBytes);
+        cdSize += hb.length + c.nameBytes.length;
+      });
+
+      const end = new Uint8Array([].concat(
+        u32(0x06054b50), u16(0), u16(0),
+        u16(entries.length), u16(entries.length),
+        u32(cdSize), u32(offset), u16(0)
+      ));
+
+      const all = chunks.concat(cdChunks, [end]);
+      const blob = new Blob(all, { type: 'application/zip' });
+      return URL.createObjectURL(blob);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  let crcTable = null;
+  function crc32(data) {
+    if (!crcTable) {
+      crcTable = new Uint32Array(256);
+      for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        crcTable[i] = c >>> 0;
+      }
+    }
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < data.length; i++) {
+      crc = crcTable[(crc ^ data[i]) & 255] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  btnClear.addEventListener('click', function () {
+    frames = [];
+    grid.innerHTML = '';
+    updateListUI();
+    showMsg('');
+  });
+
+  /* ---------------- 重置 ---------------- */
+  btnReset.addEventListener('click', function () {
+    video.pause();
+    stage.classList.add('hidden');
+    batchCard.classList.add('hidden');
+    listCard.classList.add('hidden');
+    showMsg('');
+    frames = [];
+    grid.innerHTML = '';
+    updateListUI();
+    if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+    video.removeAttribute('src');
+    try { video.load(); } catch (e) {}
+    fileInput.value = '';
+    duration = 0;
+  });
+
+  /* ---------------- 文件选择 / 拖放 ---------------- */
+  drop.addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function (e) { loadFile(e.target.files[0]); });
+  drop.addEventListener('dragover', function (e) { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', function () { drop.classList.remove('over'); });
+  drop.addEventListener('drop', function (e) {
+    e.preventDefault();
+    drop.classList.remove('over');
+    if (e.dataTransfer.files && e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  });
+
+  /* 快捷键：左右方向键步进一帧，空格播放/暂停 */
+  document.addEventListener('keydown', function (e) {
+    if (stage.classList.contains('hidden')) return;
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    const fps = getFps();
+    if (e.key === 'ArrowLeft') { e.preventDefault(); btnPrev.click(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); btnNext.click(); }
+    else if (e.key === ' ') { e.preventDefault(); btnPlay.click(); }
+    else if (e.key === 'k' || e.key === 'K') { e.preventDefault(); btnGrab.click(); }
+  });
+
+  updateListUI();
+})();
+</script>
+</body>
+</html>

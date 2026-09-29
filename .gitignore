@@ -1,0 +1,25 @@
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 测试临时产物
+tests/_*.js
+tests/_test.zip
+_*.js
+_test.zip
+
+# 日志
+*.log
+npm-debug.log*
+
+# 依赖（本项目零依赖，加这两行是防止有人误装）
+node_modules/
+package-lock.json
